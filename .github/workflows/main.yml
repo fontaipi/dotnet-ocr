@@ -7,6 +7,9 @@ on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
     branches: [ main ]
+    paths-ignore:
+    # Ignore CODE_METRICS.md and README.md files
+    - '**.md'
   pull_request:
     branches: [ main ]
 
@@ -19,6 +22,9 @@ jobs:
   build:
     # The type of runner that the job will run on
     runs-on: windows-latest
+    permissions:
+        contents: write
+        pull-requests: write
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -33,3 +39,22 @@ jobs:
         with:
           name: Publish win-x64 Ocr
           path: ./win-x64/ocr
+      # Analyze repositories source metrics:
+      # Create (or update) CODE_METRICS.md file.
+      - name: .NET code metrics
+        id: dotnet-code-metrics
+        uses: dotnet/samples/github-actions/DotNet.GitHubAction@main
+        with:
+          owner: ${{ github.repository_owner }}
+          name: ${{ github.repository }}
+          branch: ${{ github.ref }}
+          dir: ${{ './github-actions/DotNet.GitHubAction' }}
+
+      # Create a pull request if there are changes.
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v3.4.1
+        if: ${{ steps.dotnet-code-metrics.outputs.updated-metrics }} == 'true'
+        with:
+          title: '${{ steps.dotnet-code-metrics.outputs.summary-title }}'
+          body: '${{ steps.dotnet-code-metrics.outputs.summary-details }}'
+          commit-message: '.NET code metrics, automated pull request.'
